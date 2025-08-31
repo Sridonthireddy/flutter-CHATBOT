@@ -1,164 +1,53 @@
-import random
-import math
-import datetime
-import json
 import os
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+print("DEBUG GEMINI KEY:", GEMINI_API_KEY[:6], "...")
+GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+
+def ask_gemini(prompt: str) -> str:
+    try:
+        response = requests.post(
+            GEMINI_URL,
+            headers={"Content-Type": "application/json"},
+            json={"contents": [{"parts": [{"text": prompt}]}]},
+        )
+        data = response.json()
+        print("DEBUG GEMINI RESPONSE:", data)
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception as e:
+        print("DEBUG GEMINI ERROR:", e)
+        return f"(Gemini error: {e})"
+
+from datetime import datetime
 import requests
 
-knowledge_file = "knowledge.json"
-knowledge = {}
 
-last_entity = None
-conversation_history = []
+def get_reply(user_message: str, allow_web: bool) -> str:
+    """
+    Basic chatbot core logic.
+    Extend with AI/LLM integration or other features later.
+    If allow_web is True, attempt to fetch info from Gemini.
+    """
+    if not user_message or not user_message.strip():
+        return "Please say something 🙂"
 
-def load_knowledge():
-    global knowledge
-    if os.path.exists(knowledge_file):
-        with open(knowledge_file, "r") as f:
-            knowledge = json.load(f)
+    msg = user_message.lower().strip()
+    if "hello" in msg or "hi" in msg:
+        return "Hello! I'm Tina 🌸 How can I assist you today?"
+    elif "bye" in msg or "goodbye" in msg:
+        return "Goodbye! Talk to you soon 👋"
+    elif "your name" in msg or "who are you" in msg:
+        return "I'm Tina, your friendly chatbot assistant."
+    elif "time" in msg:
+        return f"The current time is {datetime.now().strftime('%H:%M')}."
+    elif "date" in msg:
+        return f"Today's date is {datetime.now().strftime('%Y-%m-%d')}."
+    elif "weather" in msg:
+        return "I can't give live weather updates yet, but you can check a weather app 🌤️"
+    elif "help" in msg:
+        return "Sure! Tell me what you need help with."
+    elif allow_web:
+        return ask_gemini(user_message)
+    else:
+        return f"I'm not able to search the web right now. You said: {user_message}"
 
-def save_knowledge():
-    with open(knowledge_file, "w") as f:
-        json.dump(knowledge, f)
-
-def evaluate_math(expr):
-    try:
-        return str(eval(expr, {"__builtins__": {}}, math.__dict__))
-    except Exception:
-        return None
-
-def convert_units(text):
-    return None  # placeholder
-
-def get_joke():
-    jokes = [
-        "Why don't scientists trust atoms? Because they make up everything!",
-        "I told my computer I needed a break, and it said 'No problem – I'll go to sleep.'"
-    ]
-    return random.choice(jokes)
-
-def get_riddle():
-    riddles = [
-        "What has keys but can't open locks? A piano.",
-        "The more you take, the more you leave behind. What am I? Footsteps."
-    ]
-    return random.choice(riddles)
-
-def get_quote():
-    quotes = [
-        "The best way to predict the future is to create it.",
-        "Life is 10% what happens to us and 90% how we react to it."
-    ]
-    return random.choice(quotes)
-
-def calculate_bmi(text):
-    return None  # placeholder
-
-def answer_qa(text):
-    return None
-
-def detect_intent(text):
-    lower = text.lower().strip()
-    if any(word in lower for word in ["hi", "hello", "hey"]):
-        return "greeting"
-    if "joke" in lower:
-        return "joke"
-    if "riddle" in lower:
-        return "riddle"
-    if "quote" in lower:
-        return "quote"
-    if any(ch.isdigit() for ch in lower):
-        return "math"
-    if "time" in lower:
-        return "time"
-    return "unknown"
-
-def web_search_duckduckgo(query):
-    try:
-        url = "https://api.duckduckgo.com/"
-        params = {
-            "q": query,
-            "format": "json",
-            "t": "tina-bot",
-            "no_html": 1,
-            "skip_disambig": 1
-        }
-        res = requests.get(url, params=params, timeout=8)
-        res.raise_for_status()
-        data = res.json()
-
-        if data.get("AbstractText"):
-            return data["AbstractText"]
-        elif data.get("Answer"):
-            return data["Answer"]
-        elif data.get("Definition"):
-            return data["Definition"]
-        elif data.get("RelatedTopics"):
-            for topic in data["RelatedTopics"]:
-                if isinstance(topic, dict) and topic.get("Text"):
-                    return topic["Text"]
-
-        return "I searched DuckDuckGo but couldn’t find anything useful."
-    except Exception as e:
-        return f"Search error: {e}"
-
-def respond(user_text, allow_web=True):
-    global last_entity, conversation_history
-
-    if last_entity:
-        if "her" in user_text.lower():
-            user_text = user_text.replace("her", last_entity)
-        if "him" in user_text.lower():
-            user_text = user_text.replace("him", last_entity)
-        if "their" in user_text.lower():
-            user_text = user_text.replace("their", last_entity)
-
-    intent = detect_intent(user_text)
-    conversation_history.append({"role": "user", "text": user_text})
-
-    if intent == "joke":
-        return get_joke()
-    elif intent == "greeting":
-        return random.choice([
-            "Hey! How can I help you?",
-            "Hello 👋",
-            "Hi there! Ready to chat?"
-        ])
-    elif intent == "riddle":
-        return get_riddle()
-    elif intent == "quote":
-        return get_quote()
-    elif intent == "math":
-        res = evaluate_math(user_text)
-        if res:
-            return res
-    elif intent == "time":
-        now = datetime.datetime.now()
-        return now.strftime("The time is %H:%M:%S")
-
-    # --- Step 2: Friendly fallback first ---
-    fallback_responses = [
-        "I'm here to help! Ask me for a joke, riddle, quote, or math calculation.",
-        "What can I do for you today?",
-        "Feel free to ask me anything!",
-        "I'm listening. How can I assist you?",
-        "Let's chat! What would you like to know?"
-    ]
-    fallback = random.choice(fallback_responses)
-
-    # --- Step 3: If web search allowed, try DuckDuckGo ---
-    if allow_web:
-        result = web_search_duckduckgo(user_text)
-        if result:
-            last_entity = user_text  # store last search subject
-            conversation_history.append({"role": "tina", "text": result})
-            return result
-
-    conversation_history.append({"role": "tina", "text": fallback})
-    return fallback
-
-
-def tina_reply(msg, allow_web=False):
-    return respond(msg, allow_web=allow_web)
-
-load_knowledge()
